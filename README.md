@@ -18,7 +18,7 @@ Permanently free-to-play games (`is_free: true`) are deliberately excluded. Ther
 Two workflows share state through `data/state.json`, committed back to the repo by the runner.
 
 - `check-free-games.yml` runs `*/30 * * * *`. Anything new gets appended to `pending`. Games already in `pending` or `seen` are skipped, so a game found at 09:00 is not re-queued at 09:30.
-- `draft-digest.yml` turns `pending` into one Mailjet campaign draft for the Steam list, sends a test copy to `TEST_RECIPIENT`, then moves those entries into `seen` and empties the queue. If `pending` is empty it does nothing. Review the test email, then open the draft link from the job log (or Mailjet → Campaigns → Drafts) and click Send.
+- `draft-digest.yml` turns `pending` into one Mailjet campaign draft for the Steam list, sends a test copy plus a short "Review needed" reminder email to `TEST_RECIPIENT`, then moves those entries into `seen` and empties the queue. If `pending` is empty it does nothing. Review the test email, then open the draft link from the job log (or Mailjet → Campaigns → Drafts) and click Send.
 
 GitHub cron is UTC only with no DST handling, so the digest workflow is scheduled at both 15:00 and 16:00 UTC. `draft-digest.js` exits immediately unless the current hour in Europe/Berlin is 17, so exactly one of the two slots runs on any given day.
 

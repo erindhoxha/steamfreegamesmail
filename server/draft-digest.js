@@ -54,6 +54,39 @@ async function createDraft(mailjet, { subject, html, text, games }) {
   return id;
 }
 
+const MAILJET_DRAFTS_URL = "https://app.mailjet.com/campaigns";
+
+// A plain nudge, separate from the test copy, so a waiting draft doesn't get missed.
+async function sendReminder(mailjet, { id, subject, games }) {
+  const to = requireEnv("TEST_RECIPIENT");
+  const lines = games.map((g) => `- ${g.title}: ${g.note}`);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  await mailjet.post("send", { version: "v3.1" }).request({
+    Messages: [
+      {
+        From: { Email: requireEnv("MJ_FROM_EMAIL"), Name: "Steam Free Games bot" },
+        To: [{ Email: to }],
+        Subject: `Review needed: Steam draft ready (${games.length} game${games.length === 1 ? "" : "s"})`,
+        TextPart: [
+          `A new Steam Free Games Mail draft is waiting in Mailjet. Nothing has been sent to subscribers.`,
+          ``,
+          `Draft #${id}: "${subject}"`,
+          ...lines,
+          ``,
+          `1. Check the test copy in your inbox.`,
+          `2. Open Mailjet > Campaigns > Drafts: ${MAILJET_DRAFTS_URL}`,
+          `3. Click Send. Some offers only last a day or two.`,
+        ].join("\n"),
+        HTMLPart: `<p>A new Steam Free Games Mail draft is waiting in Mailjet. Nothing has been sent to subscribers.</p>
+<p><b>Draft #${id}:</b> ${esc(subject)}</p>
+<ul>${games.map((g) => `<li><b>${esc(g.title)}</b>: ${esc(g.note)}</li>`).join("")}</ul>
+<ol><li>Check the test copy in your inbox.</li><li>Open <a href="${MAILJET_DRAFTS_URL}">Mailjet &rsaquo; Campaigns &rsaquo; Drafts</a>.</li><li>Click <b>Send</b>. Some offers only last a day or two.</li></ol>`,
+      },
+    ],
+  });
+  return to;
+}
+
 async function main() {
   const preview = process.env.PREVIEW === "true";
   const forced = preview || process.env.FORCE_SEND === "true";
@@ -85,7 +118,14 @@ async function main() {
   const mailjet = Mailjet.apiConnect(requireEnv("MJ_APIKEY_PUBLIC"), requireEnv("MJ_APIKEY_PRIVATE"));
   const id = await createDraft(mailjet, { subject, html, text, games });
   console.log(`created draft ${id} "${subject}" with ${games.length} game(s), test sent to ${process.env.TEST_RECIPIENT}`);
-  console.log(`review and send: https://app.mailjet.com/campaigns/creation/${id}/summary`);
+
+  try {
+    const to = await sendReminder(mailjet, { id, subject, games });
+    console.log(`reminder sent to ${to}`);
+  } catch (error) {
+    // The draft exists either way, so don't fail the run over the reminder.
+    console.error(`reminder failed: ${error.response?.data ? JSON.stringify(error.response.data) : error.message}`);
+  }
 
   // The draft now owns these games. Mark them seen so the next run doesn't draft them again.
   const draftedAt = Date.now();
@@ -94,7 +134,11 @@ async function main() {
   writeState(state);
 }
 
-main().catch((error) => {
-  console.error(error.response?.data ? JSON.stringify(error.response.data) : error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.response?.data ? JSON.stringify(error.response.data) : error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { sendReminder };
