@@ -1,0 +1,20 @@
+{
+  "name": "steam_free_games",
+  "version": "1.0.0",
+  "description": "Polls Steam for free-to-keep giveaways and free weekends, drafts one Mailjet campaign per day for review",
+  "main": "server/check-free-games.js",
+  "scripts": {
+    "check": "node server/check-free-games.js",
+    "draft": "node server/draft-digest.js",
+    "draft:now": "FORCE_SEND=true node server/draft-digest.js",
+    "preview": "PREVIEW=true node server/draft-digest.js",
+    "site:css": "npx -y tailwindcss@3.4.1 -i docs/styles/input.css -o docs/styles/output.css --minify",
+    "site:dev": "npx -y serve@14.2.4 docs -l 8765"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.5",
+    "node-mailjet": "^6.0.5"
+  }
+}

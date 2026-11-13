@@ -1,0 +1,58 @@
+name: Draft Steam digest
+
+# Creates a Mailjet campaign draft from the pending queue and emails a test copy for review.
+# Nothing reaches subscribers until the draft is sent by hand in Mailjet.
+# GitHub cron is UTC only with no DST handling, so both candidate hours run and
+# draft-digest.js exits early unless it is 17:00 in Europe/Berlin.
+on:
+  schedule:
+    - cron: "0 15 * * *" # 17:00 CEST (summer)
+    - cron: "0 16 * * *" # 17:00 CET (winter)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: steam-free-games-state
+  cancel-in-progress: false
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    env:
+      MJ_APIKEY_PUBLIC: ${{ secrets.MJ_APIKEY_PUBLIC }}
+      MJ_APIKEY_PRIVATE: ${{ secrets.MJ_APIKEY_PRIVATE }}
+      MJ_CONTACT_LIST_ID: ${{ vars.MJ_CONTACT_LIST_ID }}
+      MJ_FROM_EMAIL: ${{ vars.MJ_FROM_EMAIL }}
+      MJ_FROM_NAME: ${{ vars.MJ_FROM_NAME }}
+      TEST_RECIPIENT: ${{ vars.TEST_RECIPIENT }}
+      FORCE_SEND: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create draft and send test copy
+        run: node server/draft-digest.js
+
+      - name: Commit state
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- data; then
+            echo "No state change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git commit -m "chore: mark drafted games as seen"
+          git pull --rebase --autostash
+          git push

@@ -1,0 +1,100 @@
+// Turns the pending queue into a Mailjet campaign draft and sends a test copy for review.
+// Nothing reaches subscribers until you open the draft in Mailjet and click Send.
+//
+//   node server/draft-digest.js            only runs at 17:00 Europe/Berlin
+//   FORCE_SEND=true node ...               ignore the time gate
+//   PREVIEW=true node ...                  write preview.html, no Mailjet calls, queue untouched
+
+require("dotenv").config();
+
+const fs = require("fs");
+const path = require("path");
+const Mailjet = require("node-mailjet");
+const { readState, writeState, gameKey } = require("./state");
+const { buildSubject, buildHtml, buildText } = require("./email");
+
+const SEND_TIMEZONE = "Europe/Berlin";
+const SEND_HOUR = 17;
+
+function hourIn(timeZone) {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+}
+
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env var ${name}`);
+  return value;
+}
+
+async function createDraft(mailjet, { subject, html, text, games }) {
+  const dateLabel = new Date().toISOString().slice(0, 10);
+  const draft = await mailjet.post("campaigndraft", { version: "v3" }).request({
+    Locale: "en_US",
+    Sender: process.env.MJ_FROM_NAME || "Steam Free Games",
+    SenderName: process.env.MJ_FROM_NAME || "Steam Free Games",
+    SenderEmail: requireEnv("MJ_FROM_EMAIL"),
+    Subject: subject,
+    ContactsListID: Number(requireEnv("MJ_CONTACT_LIST_ID")),
+    Title: `Steam ${dateLabel}: ${games.map((g) => g.title).join(", ")}`.slice(0, 250),
+  });
+  const id = draft.body.Data[0].ID;
+
+  await mailjet
+    .post("campaigndraft", { version: "v3" })
+    .id(id)
+    .action("detailcontent")
+    .request({ "Html-part": html, "Text-part": text });
+
+  await mailjet
+    .post("campaigndraft", { version: "v3" })
+    .id(id)
+    .action("test")
+    .request({ Recipients: [{ Email: requireEnv("TEST_RECIPIENT"), Name: "Review" }] });
+
+  return id;
+}
+
+async function main() {
+  const preview = process.env.PREVIEW === "true";
+  const forced = preview || process.env.FORCE_SEND === "true";
+  const localHour = hourIn(SEND_TIMEZONE);
+
+  if (!forced && localHour !== SEND_HOUR) {
+    console.log(`skipping: ${localHour}:00 in ${SEND_TIMEZONE}, drafts are only made at ${SEND_HOUR}:00`);
+    return;
+  }
+
+  const state = readState();
+  if (state.pending.length === 0) {
+    console.log("skipping: nothing new since the last draft");
+    return;
+  }
+
+  const games = state.pending;
+  const subject = buildSubject(games);
+  const html = buildHtml(games);
+  const text = buildText(games);
+
+  if (preview) {
+    const file = path.join(__dirname, "..", "preview.html");
+    fs.writeFileSync(file, html);
+    console.log(`subject: ${subject}\npreview written to ${file}`);
+    return;
+  }
+
+  const mailjet = Mailjet.apiConnect(requireEnv("MJ_APIKEY_PUBLIC"), requireEnv("MJ_APIKEY_PRIVATE"));
+  const id = await createDraft(mailjet, { subject, html, text, games });
+  console.log(`created draft ${id} "${subject}" with ${games.length} game(s), test sent to ${process.env.TEST_RECIPIENT}`);
+  console.log(`review and send: https://app.mailjet.com/campaigns/creation/${id}/summary`);
+
+  // The draft now owns these games. Mark them seen so the next run doesn't draft them again.
+  const draftedAt = Date.now();
+  for (const game of games) state.seen[gameKey(game)] = draftedAt;
+  state.pending = [];
+  writeState(state);
+}
+
+main().catch((error) => {
+  console.error(error.response?.data ? JSON.stringify(error.response.data) : error.message);
+  process.exit(1);
+});
