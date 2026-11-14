@@ -1,8 +1,20 @@
 {
-  "pending": [],
+  "pending": [
+    {
+      "kind": "weekend",
+      "appId": "2605790",
+      "title": "Deep Rock Galactic: Rogue Core",
+      "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2605790/8a84d291390183d33a9629e68cdd35ad27d6217b/header_alt_assets_2.jpg?t=1794615194",
+      "url": "https://store.steampowered.com/app/2605790/",
+      "price": "",
+      "note": "Play for free until Nov 16 @ 10:00am",
+      "foundAt": "2026-11-14T16:18:29.825Z"
+    }
+  ],
   "seen": {
     "weekend:2778610": 1794564365752,
     "weekend:1677280": 1794672542118,
     "weekend:949230": 1794672542118
-  }
+  },
+  "lastDraftDay": ""
 }
