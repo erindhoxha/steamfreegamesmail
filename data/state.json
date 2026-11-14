@@ -1,27 +1,8 @@
 {
-  "pending": [
-    {
-      "kind": "weekend",
-      "appId": "1677280",
-      "title": "Company of Heroes 3",
-      "image": "",
-      "url": "https://store.steampowered.com/app/1677280/",
-      "price": "",
-      "note": "Play for free until Nov 16 @ 10:00am",
-      "foundAt": "2026-11-14T00:51:24.784Z"
-    },
-    {
-      "kind": "weekend",
-      "appId": "949230",
-      "title": "Cities: Skylines II",
-      "image": "",
-      "url": "https://store.steampowered.com/app/949230/",
-      "price": "",
-      "note": "Play for free until Nov 16 @ 10:00am",
-      "foundAt": "2026-11-14T07:28:11.351Z"
-    }
-  ],
+  "pending": [],
   "seen": {
-    "weekend:2778610": 1794564365752
+    "weekend:2778610": 1794564365752,
+    "weekend:1677280": 1794672542118,
+    "weekend:949230": 1794672542118
   }
 }
