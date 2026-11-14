@@ -77,7 +77,10 @@ const truncate = (text, max = 170) => {
   return `${text.slice(0, text.lastIndexOf(" ", max)).replace(/[,.;:]$/, "")}…`;
 };
 
+const allDemos = (games) => games.length > 0 && games.every((g) => g.kind === "demo");
+
 function buildSubject(games) {
+  if (allDemos(games)) return `${games.length} Steam Next Fest demos worth trying`;
   const keep = games.filter((g) => g.kind === "keep");
   if (keep.length === games.length) {
     return keep.length === 1 ? `Free on Steam: ${games[0].title}` : `${keep.length} free Steam games to claim`;
@@ -124,18 +127,21 @@ function gameCard(game) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="card" bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.border};border-radius:8px;">
       ${img}
       <tr><td class="pad" style="padding:20px 24px 24px;">
-        <p style="margin:0 0 10px;">${tag(keep ? "Free to keep" : "Free weekend")}</p>
+        <p style="margin:0 0 10px;">${tag(keep ? "Free to keep" : game.kind === "demo" ? "Free demo" : "Free weekend")}</p>
         ${p(esc(game.title), { cls: "ink", size: 20, color: C.ink, margin: "0 0 4px", extra: "font-weight:700;line-height:1.3;" })}
         ${p(esc(game.note), { cls: "muted", size: 14, color: C.muted, margin: "0 0 12px" })}
         ${game.description ? p(esc(truncate(game.description)), { margin: "0 0 16px" }) : ""}
         ${priceLine(game)}
-        ${button(href, keep ? "Claim on Steam" : "Play on Steam")}
+        ${button(href, keep ? "Claim on Steam" : game.kind === "demo" ? "Try the demo" : "Play on Steam")}
       </td></tr>
     </table>
   </td></tr>`;
 }
 
 function heading(games) {
+  if (allDemos(games)) {
+    return ["Steam Next Fest demos worth trying", "Steam Next Fest is on: hundreds of upcoming games have a free demo. Here are a few worth a look."];
+  }
   const keep = games.filter((g) => g.kind === "keep").length;
   if (keep === games.length) {
     return ["Free to keep on Steam", "Claim before the offer ends and the game stays in your library."];
@@ -199,9 +205,11 @@ function buildText(games) {
       .join("\n");
   const keep = games.filter((g) => g.kind === "keep").map(block);
   const weekend = games.filter((g) => g.kind === "weekend").map(block);
+  const demos = games.filter((g) => g.kind === "demo").map(block);
   return [
     keep.length ? `FREE TO KEEP ON STEAM\n\n${keep.join("\n\n")}` : "",
     weekend.length ? `FREE TO PLAY ON STEAM (you don't keep these)\n\n${weekend.join("\n\n")}` : "",
+    demos.length ? `STEAM NEXT FEST DEMOS WORTH TRYING\n\n${demos.join("\n\n")}` : "",
     `P.S. I also run an Epic version that emails you the free Epic Games Store games every Thursday:\n${EPIC_URL}`,
     `Buy me a coffee: ${COFFEE_URL}\nErind`,
     "Unsubscribe: [[UNSUB_LINK_EN]]",

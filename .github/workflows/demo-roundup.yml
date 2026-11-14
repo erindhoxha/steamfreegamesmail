@@ -1,0 +1,35 @@
+name: Draft Next Fest demo roundup
+
+# Manual only. Run it during Steam Next Fest (February, June and October).
+# Creates a Mailjet campaign draft and emails a test copy; nothing reaches subscribers
+# until the draft is sent by hand in Mailjet.
+on:
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "How many demos"
+        default: "5"
+      appids:
+        description: "Optional: hand-picked demo or game app IDs, comma separated (overrides Steam's top list)"
+        default: ""
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    env:
+      MJ_APIKEY_PUBLIC: ${{ secrets.MJ_APIKEY_PUBLIC }}
+      MJ_APIKEY_PRIVATE: ${{ secrets.MJ_APIKEY_PRIVATE }}
+      MJ_CONTACT_LIST_ID: ${{ vars.MJ_CONTACT_LIST_ID }}
+      MJ_FROM_EMAIL: ${{ vars.MJ_FROM_EMAIL }}
+      MJ_FROM_NAME: ${{ vars.MJ_FROM_NAME }}
+      TEST_RECIPIENT: ${{ vars.TEST_RECIPIENT }}
+      DEMO_COUNT: ${{ inputs.count }}
+      DEMO_APPIDS: ${{ inputs.appids }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Create draft and send test copy
+        run: node server/demo-roundup.js
