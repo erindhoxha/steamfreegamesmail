@@ -16,13 +16,59 @@ const { buildSubject, buildHtml, buildText } = require("./email");
 const SEND_TIMEZONE = "Europe/Berlin";
 const SEND_HOUR = 17;
 
+// An offer that ends before the next digest plus this buffer gets its own urgent draft.
+// The buffer covers GitHub starting the digest run late and the time it takes you to click Send.
+const URGENT_BUFFER_MS = 6 * 60 * 60 * 1000;
+
 // GitHub often starts scheduled runs hours late, so the gate is "at or after", not "exactly".
-function dayIn(timeZone) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date()); // YYYY-MM-DD
+function dayIn(timeZone, at = Date.now()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date(at)); // YYYY-MM-DD
 }
 
-function hourIn(timeZone) {
-  return Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
+function hourIn(timeZone, at = Date.now()) {
+  return Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(new Date(at)));
+}
+
+// UTC ms for a wall-clock time in a time zone (handles summer/winter time).
+function zonedTime(year, month, day, hour, timeZone) {
+  const guess = Date.UTC(year, month - 1, day, hour);
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(new Date(guess))
+      .map((part) => [part.type, part.value]),
+  );
+  const shown = Date.UTC(+parts.year, parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  return guess - (shown - guess);
+}
+
+// When the next digest is due: today at 17:00 if today's isn't made yet (or now, if it's
+// already past 17:00 and the run is late), otherwise tomorrow at 17:00.
+function nextDigestAt(state, now = Date.now()) {
+  const today = dayIn(SEND_TIMEZONE, now);
+  const [y, m, d] = today.split("-").map(Number);
+  if (state.lastDraftDay !== today) return Math.max(now, zonedTime(y, m, d, SEND_HOUR, SEND_TIMEZONE));
+  return zonedTime(y, m, d + 1, SEND_HOUR, SEND_TIMEZONE);
+}
+
+const isExpired = (game, now = Date.now()) => Boolean(game.endsAt) && game.endsAt <= now;
+
+const isUrgent = (game, state, now = Date.now()) =>
+  Boolean(game.endsAt) && !isExpired(game, now) && game.endsAt <= nextDigestAt(state, now) + URGENT_BUFFER_MS;
+
+function hoursLeft(games, now = Date.now()) {
+  const ends = games.map((g) => g.endsAt).filter(Boolean);
+  if (ends.length === 0) return "";
+  const hours = Math.max(0, Math.floor((Math.min(...ends) - now) / 3600000));
+  return hours < 1 ? "ends in under 1h" : `ends in ${hours}h`;
 }
 
 function requireEnv(name) {
@@ -31,7 +77,7 @@ function requireEnv(name) {
   return value;
 }
 
-async function createDraft(mailjet, { subject, html, text, games }) {
+async function createDraft(mailjet, { subject, html, text, games, urgent = false }) {
   const dateLabel = new Date().toISOString().slice(0, 10);
   const draft = await mailjet.post("campaigndraft", { version: "v3" }).request({
     Locale: "en_US",
@@ -40,7 +86,7 @@ async function createDraft(mailjet, { subject, html, text, games }) {
     SenderEmail: requireEnv("MJ_FROM_EMAIL"),
     Subject: subject,
     ContactsListID: Number(requireEnv("MJ_CONTACT_LIST_ID")),
-    Title: `Steam ${dateLabel}: ${games.map((g) => g.title).join(", ")}`.slice(0, 250),
+    Title: `${urgent ? "URGENT " : ""}Steam ${dateLabel}: ${games.map((g) => g.title).join(", ")}`.slice(0, 250),
   });
   const id = draft.body.Data[0].ID;
 
@@ -62,7 +108,7 @@ async function createDraft(mailjet, { subject, html, text, games }) {
 const MAILJET_DRAFTS_URL = "https://app.mailjet.com/campaigns";
 
 // A plain nudge, separate from the test copy, so a waiting draft doesn't get missed.
-async function sendReminder(mailjet, { id, subject, games }) {
+async function sendReminder(mailjet, { id, subject, games, urgent = false }) {
   const to = requireEnv("TEST_RECIPIENT");
   const lines = games.map((g) => `- ${g.title}: ${g.note}`);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -71,21 +117,25 @@ async function sendReminder(mailjet, { id, subject, games }) {
       {
         From: { Email: requireEnv("MJ_FROM_EMAIL"), Name: "Steam Free Games bot" },
         To: [{ Email: to }],
-        Subject: `Review needed: Steam draft ready (${games.length} game${games.length === 1 ? "" : "s"})`,
+        Subject: urgent
+          ? `URGENT: Steam draft ready, ${hoursLeft(games) || "ends before the digest"}`
+          : `Review needed: Steam draft ready (${games.length} game${games.length === 1 ? "" : "s"})`,
         TextPart: [
           `A new Steam Free Games Mail draft is waiting in Mailjet. Nothing has been sent to subscribers.`,
+          ...(urgent ? [``, `This offer ends before the 17:00 digest, so it has its own draft.`] : []),
           ``,
           `Draft #${id}: "${subject}"`,
           ...lines,
           ``,
           `1. Check the test copy in your inbox.`,
           `2. Open Mailjet > Campaigns > Drafts: ${MAILJET_DRAFTS_URL}`,
-          `3. Click Send. Some offers only last a day or two.`,
+          urgent ? `3. Click Send now, before the offer ends.` : `3. Click Send. Some offers only last a day or two.`,
         ].join("\n"),
         HTMLPart: `<p>A new Steam Free Games Mail draft is waiting in Mailjet. Nothing has been sent to subscribers.</p>
+${urgent ? "<p><b>This offer ends before the 17:00 digest, so it has its own draft.</b></p>" : ""}
 <p><b>Draft #${id}:</b> ${esc(subject)}</p>
 <ul>${games.map((g) => `<li><b>${esc(g.title)}</b>: ${esc(g.note)}</li>`).join("")}</ul>
-<ol><li>Check the test copy in your inbox.</li><li>Open <a href="${MAILJET_DRAFTS_URL}">Mailjet &rsaquo; Campaigns &rsaquo; Drafts</a>.</li><li>Click <b>Send</b>. Some offers only last a day or two.</li></ol>`,
+<ol><li>Check the test copy in your inbox.</li><li>Open <a href="${MAILJET_DRAFTS_URL}">Mailjet &rsaquo; Campaigns &rsaquo; Drafts</a>.</li><li>${urgent ? "Click <b>Send</b> now, before the offer ends." : "Click <b>Send</b>. Some offers only last a day or two."}</li></ol>`,
       },
     ],
   });
@@ -108,12 +158,23 @@ async function main() {
     return;
   }
 
-  if (state.pending.length === 0) {
+  // Don't email games whose offer has already ended.
+  const expired = state.pending.filter((g) => isExpired(g));
+  if (expired.length > 0) {
+    for (const game of expired) console.log(`  - dropped expired: ${game.title}`);
+    if (!preview) {
+      state.pending = state.pending.filter((g) => !isExpired(g));
+      writeState(state);
+    }
+  }
+  const pending = state.pending.filter((g) => !isExpired(g));
+
+  if (pending.length === 0) {
     console.log("skipping: nothing new since the last draft");
     return;
   }
 
-  const games = state.pending;
+  const games = pending;
   const subject = buildSubject(games);
   const html = buildHtml(games);
   const text = buildText(games);
@@ -152,4 +213,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sendReminder };
+module.exports = { createDraft, sendReminder, isUrgent, isExpired, nextDigestAt, requireEnv };

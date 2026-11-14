@@ -15,6 +15,14 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Mailjet settings are only used when a game ends before the 17:00 digest (urgent draft).
+    env:
+      MJ_APIKEY_PUBLIC: ${{ secrets.MJ_APIKEY_PUBLIC }}
+      MJ_APIKEY_PRIVATE: ${{ secrets.MJ_APIKEY_PRIVATE }}
+      MJ_CONTACT_LIST_ID: ${{ vars.MJ_CONTACT_LIST_ID }}
+      MJ_FROM_EMAIL: ${{ vars.MJ_FROM_EMAIL }}
+      MJ_FROM_NAME: ${{ vars.MJ_FROM_NAME }}
+      TEST_RECIPIENT: ${{ vars.TEST_RECIPIENT }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

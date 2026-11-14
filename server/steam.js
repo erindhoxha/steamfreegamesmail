@@ -150,7 +150,8 @@ async function fetchFreeToKeep() {
     if (details.type !== "game" || details.is_free || !price || price.discount_percent !== 100 || price.final !== 0) continue;
 
     // featuredcategories only covers featured specials, so fall back to the store page.
-    const deadline = formatDeadline(deadlines.get(appId) || (await fetchStorePageDeadline(appId)));
+    const endsAtSeconds = deadlines.get(appId) || (await fetchStorePageDeadline(appId));
+    const deadline = formatDeadline(endsAtSeconds);
     games.push({
       kind: "keep",
       appId,
@@ -160,6 +161,7 @@ async function fetchFreeToKeep() {
       url: `${STORE}/app/${appId}/`,
       price: formatPrice(price.initial, price.currency),
       note: deadline ? `Free to keep until ${deadline} UTC` : "Free to keep for a limited time",
+      endsAt: endsAtSeconds ? endsAtSeconds * 1000 : null, // ms, used to spot offers that end before the digest
     });
   }
 
