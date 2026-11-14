@@ -1,7 +1,7 @@
 // Turns the pending queue into a Mailjet campaign draft and sends a test copy for review.
 // Nothing reaches subscribers until you open the draft in Mailjet and click Send.
 //
-//   node server/draft-digest.js            only runs at 17:00 Europe/Berlin
+//   node server/draft-digest.js            first run at/after 17:00 Europe/Berlin, once per day
 //   FORCE_SEND=true node ...               ignore the time gate
 //   PREVIEW=true node ...                  write preview.html, no Mailjet calls, queue untouched
 
@@ -15,6 +15,11 @@ const { buildSubject, buildHtml, buildText } = require("./email");
 
 const SEND_TIMEZONE = "Europe/Berlin";
 const SEND_HOUR = 17;
+
+// GitHub often starts scheduled runs hours late, so the gate is "at or after", not "exactly".
+function dayIn(timeZone) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date()); // YYYY-MM-DD
+}
 
 function hourIn(timeZone) {
   return Number(new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", hourCycle: "h23" }).format(new Date()));
@@ -91,13 +96,18 @@ async function main() {
   const preview = process.env.PREVIEW === "true";
   const forced = preview || process.env.FORCE_SEND === "true";
   const localHour = hourIn(SEND_TIMEZONE);
+  const today = dayIn(SEND_TIMEZONE);
+  const state = readState();
 
-  if (!forced && localHour !== SEND_HOUR) {
-    console.log(`skipping: ${localHour}:00 in ${SEND_TIMEZONE}, drafts are only made at ${SEND_HOUR}:00`);
+  if (!forced && localHour < SEND_HOUR) {
+    console.log(`skipping: ${localHour}:00 in ${SEND_TIMEZONE}, drafts are made from ${SEND_HOUR}:00`);
+    return;
+  }
+  if (!forced && state.lastDraftDay === today) {
+    console.log(`skipping: already made today's draft (${today})`);
     return;
   }
 
-  const state = readState();
   if (state.pending.length === 0) {
     console.log("skipping: nothing new since the last draft");
     return;
@@ -131,6 +141,7 @@ async function main() {
   const draftedAt = Date.now();
   for (const game of games) state.seen[gameKey(game)] = draftedAt;
   state.pending = [];
+  state.lastDraftDay = today;
   writeState(state);
 }
 

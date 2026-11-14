@@ -2,12 +2,12 @@ name: Draft Steam digest
 
 # Creates a Mailjet campaign draft from the pending queue and emails a test copy for review.
 # Nothing reaches subscribers until the draft is sent by hand in Mailjet.
-# GitHub cron is UTC only with no DST handling, so both candidate hours run and
-# draft-digest.js exits early unless it is 17:00 in Europe/Berlin.
+# GitHub cron is UTC only, and scheduled runs often start hours late. So this runs
+# hourly through the evening and draft-digest.js makes one draft per day, on the first
+# run at or after 17:00 Europe/Berlin.
 on:
   schedule:
-    - cron: "0 15 * * *" # 17:00 CEST (summer)
-    - cron: "0 16 * * *" # 17:00 CET (winter)
+    - cron: "5 15-21 * * *" # 16:05-22:05 CET / 17:05-23:05 CEST
   workflow_dispatch:
 
 permissions:

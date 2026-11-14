@@ -71,6 +71,9 @@ function extractItemDataSets(html) {
   return sets;
 }
 
+// Steam's CDN serves every app's header at this path, used when the API has none.
+const headerImageUrl = (appId) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`;
+
 async function fetchAppDetails(appId) {
   try {
     const { data } = await client.get(`${STORE}/api/appdetails`, {
@@ -152,7 +155,7 @@ async function fetchFreeToKeep() {
       kind: "keep",
       appId,
       title: details.name,
-      image: details.header_image || "",
+      image: details.header_image || headerImageUrl(appId),
       description: details.short_description || "",
       url: `${STORE}/app/${appId}/`,
       price: formatPrice(price.initial, price.currency),
@@ -180,7 +183,7 @@ async function fetchFreeWeekends() {
         kind: "weekend",
         appId,
         title: app.name,
-        image: app.header || "",
+        image: "",
         url: `${STORE}/app/${appId}/`,
         price: "",
         note: app.free_weekend_status || "Free to play this weekend",
@@ -188,7 +191,14 @@ async function fetchFreeWeekends() {
     }
   }
 
-  return [...byAppId.values()];
+  // The storefront payload has no header image for free-weekend apps, so look it up.
+  const games = [...byAppId.values()];
+  for (const game of games) {
+    const details = await fetchAppDetails(game.appId);
+    game.image = details?.header_image || headerImageUrl(game.appId);
+    await sleep(400);
+  }
+  return games;
 }
 
 module.exports = { fetchFreeToKeep, fetchFreeWeekends };

@@ -58,10 +58,10 @@ const priceBlock = (price) => `
 function card(game) {
   const href = esc(withUtm(game.url));
   return [
-    row(
+    game.image ? row(
       `<a href="${href}" target="_blank"><img src="${esc(game.image)}" width="550" alt="${esc(game.title)}" style="display:block;width:100%;max-width:550px;height:auto;border:0;"></a>`,
       "0 25px",
-    ),
+    ) : "",
     row(text(`<a href="${href}" target="_blank" style="color:${HEADING};text-decoration:none;">${esc(game.title)}</a>`, { size: 18, weight: "bold" }), "14px 25px 0"),
     game.description ? row(text(esc(game.description), { color: MUTED }), "10px 25px 0") : "",
     game.kind === "keep" ? row(priceBlock(game.price), "12px 25px 0") : "",

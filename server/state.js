@@ -8,7 +8,7 @@ const gameKey = (game) => `${game.kind}:${game.appId}`;
 function readState() {
   try {
     const state = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
-    return { pending: state.pending || [], seen: state.seen || {} };
+    return { pending: state.pending || [], seen: state.seen || {}, lastDraftDay: state.lastDraftDay || "" };
   } catch {
     return { pending: [], seen: {} };
   }
