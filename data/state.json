@@ -1,5 +1,16 @@
 {
-  "pending": [],
+  "pending": [
+    {
+      "kind": "weekend",
+      "appId": "1158310",
+      "title": "Crusader Kings III",
+      "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1158310/9d06a62089bd4747589431ac1c8bc3112841d528/header_alt_assets_12.jpg?t=1795111327",
+      "url": "https://store.steampowered.com/app/1158310/",
+      "price": "",
+      "note": "Play for free until Nov 23 @ 10:00am",
+      "foundAt": "2026-11-19T19:24:30.514Z"
+    }
+  ],
   "seen": {
     "weekend:2778610": 1794564365752,
     "weekend:1677280": 1794672542118,
